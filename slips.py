@@ -162,7 +162,12 @@ def get_slips_conf_path():
 ####################
 # Main
 ####################
-if __name__ == '__main__':  
+if __name__ == '__main__':
+    # Slips needs to be run with sudo
+    if os.geteuid() != 0:
+        print("Slips needs to be run as root. Stopping.")
+        sys.exit()
+
     print('Stratosphere Linux IPS. Version {}'.format(version))
     print('https://stratosphereips.org\n')
 
