@@ -31,7 +31,6 @@ class Module(Module, multiprocessing.Process):
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')
-
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
@@ -156,11 +155,8 @@ class Module(Module, multiprocessing.Process):
                     if not line.startswith('#') and not line.startswith('"type"'):
                         break
 
-                #
                 # Find in which column is the imporant info in this
                 # TI file (domain or ip)
-                #
-
                 # Store the current position of the TI file
                 current_file_position = malicious_file.tell()
 
@@ -171,6 +167,12 @@ class Module(Module, multiprocessing.Process):
                     description_column = amount_of_columns - 1
                 # Search the first column that is an IPv4, IPv6 or domain
                 for column in range(amount_of_columns):
+                    # To delete the subnet mask in case of .netset files
+                    try:
+                        data[column] = data[column][:data[column].index("/")]
+                    except:
+                        # not a netset file
+                        pass
                     # Check if ip is valid.
                     try:
                         ip_address = ipaddress.IPv4Address(data[column].strip())
@@ -217,6 +219,12 @@ class Module(Module, multiprocessing.Process):
                     # In the new format the ip is in the second position.
                     # And surronded by "
                     data = line.replace("\n","").replace("\"","").split(",")[data_column].strip()
+                    # To delete the subnet mask in case of .netset files
+                    try:
+                        data = data[:data.index("/")]
+                    except:
+                        # not a netset file
+                        pass
 
                     description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
                     self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
@@ -311,7 +319,7 @@ class Module(Module, multiprocessing.Process):
                 new_hash = self.__get_hash_from_file(path_to_files + '/' + localfile)
                 if new_hash and old_hash != new_hash:
                     # Our malicious file was changed. Load the new one
-                    self.print(f'Updating the local TI file {localfile}', 3, 0)
+                    self.print(f'Updating the local TI file {localfile}')
                     if old_hash:
                         # File is updated and was in database.
                         # Delete previous data of this file.
