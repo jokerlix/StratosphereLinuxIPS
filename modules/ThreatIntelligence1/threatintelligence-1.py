@@ -168,14 +168,22 @@ class Module(Module, multiprocessing.Process):
                 # Search the first column that is an IPv4, IPv6 or domain
                 for column in range(amount_of_columns):
                     # To delete the subnet mask in case of .netset files
+                    # format 220.154.0.0/16 or ip without subnet mask
                     try:
                         data[column] = data[column][:data[column].index("/")]
                     except:
                         # not a netset file
                         pass
+                    # To get the ip in ipsum feeds format
+                    # format: ip    number_of_blacklists (tab separated)
+                    # format 47.233.44.180    1
+                    if "\t" in data[column]:
+                        data[column] = data[column].split()[0]
+
+                    current_ioc = data[column].strip()
                     # Check if ip is valid.
                     try:
-                        ip_address = ipaddress.IPv4Address(data[column].strip())
+                        ip_address = ipaddress.IPv4Address(current_ioc)
                         # Is IPv4! let go
                         data_column = column
                         self.print(f'The data is on column {column} and is ipv4: {ip_address}', 0, 6)
@@ -183,7 +191,7 @@ class Module(Module, multiprocessing.Process):
                     except ipaddress.AddressValueError:
                         # Is it ipv6?
                         try:
-                            ip_address = ipaddress.IPv6Address(data[column].strip())
+                            ip_address = ipaddress.IPv6Address(current_ioc)
                             # Is IPv6! let go
                             data_column = column
                             self.print(f'The data is on column {column} and is ipv6: {ip_address}', 0, 6)
@@ -191,7 +199,7 @@ class Module(Module, multiprocessing.Process):
                         except ipaddress.AddressValueError:
                             # It does not look as IP address.
                             # So it should be a domain
-                            if validators.domain(data[column].strip()):
+                            if validators.domain(current_ioc):
                                 data_column = column
                                 self.print(f'The data is on column {column} and is domain: {data[column]}', 0, 6)
                                 break
@@ -225,8 +233,13 @@ class Module(Module, multiprocessing.Process):
                     except:
                         # not a netset file
                         pass
-
-                    description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
+                    # To get the ip in ipsum feeds format
+                    if "\t" in data:
+                        data, description = data.split()[0], "Appeared in " + data.split()[1] +" blacklists"
+                    else:
+                        # not ipsum file
+                        # todo edit the delete function
+                        description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
                     self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
 
                     # Check if ip is valid.
