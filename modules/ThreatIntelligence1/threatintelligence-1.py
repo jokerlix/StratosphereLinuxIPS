@@ -136,11 +136,11 @@ class Module(Module, multiprocessing.Process):
         try:
             malicious_ips_dict = {}
             malicious_domains_dict = {}
-            with open(malicious_data_path) as malicious_file:
+            with open(malicious_data_path,'r') as malicious_file:
 
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 4, 0)
 
-                # Remove comments and find the description column if possible
+                # Remove comments at the begging of the file and find the description column if possible
                 description_column = None
                 while True:
                     line = malicious_file.readline()
@@ -154,12 +154,14 @@ class Module(Module, multiprocessing.Process):
                                 description_column = line.split(',').index(name_column)
                     if not line.startswith('#') and not line.startswith('"type"'):
                         break
-
-                # Find in which column is the imporant info in this
+                # some files have (\n) or spaces after the first few comments  , we should ignore them
+                while len(line) < 5  or line.isspace():
+                    # skip to the next line
+                    line = malicious_file.readline()
+                # Find in which column is the important info in this
                 # TI file (domain or ip)
                 # Store the current position of the TI file
                 current_file_position = malicious_file.tell()
-
                 # temp_line = malicious_file.readline()
                 data = line.replace("\n","").replace("\"","").split(",")
                 amount_of_columns = len(line.split(","))
@@ -214,8 +216,10 @@ class Module(Module, multiprocessing.Process):
                 # Now that we read the first line, go back so we
                 # can process it
                 malicious_file.seek(current_file_position)
-
                 for line in malicious_file:
+                    # some files have (\n) or spaces in the middle of the file, ignore them
+                    if len(line) < 5  or line.isspace() or line.startswith("#") or line is '':
+                        continue
                     # The format of the file should be
                     # "0", "103.15.53.231","90", "Karel from our village. He is bad guy."
                     # So the second column will be used as important data with
