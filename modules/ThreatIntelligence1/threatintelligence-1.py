@@ -243,7 +243,6 @@ class Module(Module, multiprocessing.Process):
                     # Handle ipsum feeds and .intel feeds
                     if "\t" in data:
                         column_data = tuple(data.split("\t"))
-                        print(column_data)
                         data_ , second_column_data= column_data[0], column_data[1].lower()
                         if 'intel' in second_column_data:
                             # is .intel feed
