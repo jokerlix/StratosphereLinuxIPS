@@ -154,8 +154,8 @@ class Module(Module, multiprocessing.Process):
                                 description_column = line.split(',').index(name_column)
                     if not line.startswith('#') and not line.startswith('"type"'):
                         break
-                # some files have (\n) or spaces after the first few comments  , we should ignore them
-                while len(line) < 5  or line.isspace():
+                # some files have (\n) or spaces after the first few comments , we should ignore them
+                while len(line) < 5 or line.isspace():
                     # skip to the next line
                     line = malicious_file.readline()
                 # Find in which column is the important info in this
@@ -232,14 +232,34 @@ class Module(Module, multiprocessing.Process):
                     # And surronded by "
                     data = line.replace("\n","").replace("\"","").split(",")[data_column].strip()
                     # To delete the subnet mask in case of .netset files
-                    try:
-                        data = data[:data.index("/")]
-                    except:
-                        # not a netset file
-                        pass
-                    # To get the ip in ipsum feeds format
+                    if 'http' not in data:
+                        try:
+                            # this is a netset file and the / is for the subnet mask
+                            data = data[:data.index("/")]
+                        except:
+                            # not a netset feed
+                            pass
+
+                    # Handle ipsum feeds and .intel feeds
                     if "\t" in data:
-                        data, description = data.split()[0], "Appeared in " + data.split()[1] +" blacklists"
+                        column_data = tuple(data.split("\t"))
+                        print(column_data)
+                        data_ , second_column_data= column_data[0], column_data[1].lower()
+                        if 'intel' in second_column_data:
+                            # is .intel feed
+                            #fields	indicator	indicator_type	meta.source	meta.do_notice	meta.desc
+                            # second column is intel::type of ioc, for example: Intel::DOMAIN
+                            if ('hash' in second_column_data
+                                or 'email' in second_column_data
+                                or 'url' in second_column_data):
+                                # ignore this type of ioc, go to the next line
+                                continue
+                            description = second_column_data + " " + data.split()[4]
+                        else:
+                            # is ipsum feed
+                            # second column is the number of blacklists
+                            description =  "Appeared in " + second_column_data + " blacklists"
+                        data = data_
                     else:
                         # not ipsum file
                         # todo edit the delete function
