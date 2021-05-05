@@ -261,7 +261,6 @@ class Module(Module, multiprocessing.Process):
                         data = data_
                     else:
                         # not ipsum file
-                        # todo edit the delete function
                         description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
                     self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
 
