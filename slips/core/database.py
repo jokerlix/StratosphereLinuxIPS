@@ -993,9 +993,35 @@ class Database(object):
             # print(f'In the DB: IP {ip}, and data {data}')
         return data
 
+    def getURLData(self,url):
+        """
+        Return information about this URL
+        Returns a dictionary or False if there is no IP in the database
+        We need to separate these three cases:
+        1- IP is in the DB without data. Return empty dict.
+        2- IP is in the DB with data. Return dict.
+        3- IP is not in the DB. Return False
+        """
+        data = self.rcache.hget('URLsInfo', url)
+        if data:
+            # This means the URL was in the database, with or without data
+            # Convert the data
+            data = json.loads(data)
+        else:
+            # The IP was not in the DB
+            data = False
+        return data
+
     def getallIPs(self):
         """ Return list of all IPs in the DB """
         data = self.rcache.hgetall('IPsInfo')
+        # data = json.loads(data)
+        return data
+
+    def getallURLs(self):
+        #todo see where this function is called
+        """ Return list of all URLs in the DB """
+        data = self.rcache.hgetall('URLsInfo')
         # data = json.loads(data)
         return data
 
@@ -1036,9 +1062,37 @@ class Database(object):
             # Publish that there is a new IP ready in the channel
             self.publish('new_ip', ip)
 
+    def setNewURL(self, url: str):
+        """
+        1- Stores this new URL in the URLs hash
+        2- Publishes in the channels that there is a new URL, and that we want
+            data from the Threat Intelligence modules
+        """
+        data = self.getURLData(url)
+        if data is False:
+            # If there is no data about this URL
+            # Set this URL for the first time in the URLsInfo
+            # Its VERY important that the data of the first time we see a URL
+            # must be '{}', an empty dictionary! if not the logic breaks.
+            # We use the empty dictionary to find if an URL exists or not
+            self.rcache.hset('URLsInfo', url, '{}')
+            # Publish that there is a new IP ready in the channel
+            # todo handle this channel
+            self.publish('new_url', url)
+
+
     def getIP(self, ip):
         """ Check if this ip is the hash of the profiles! """
         data = self.rcache.hget('IPsInfo', ip)
+        if data:
+            return True
+        else:
+            return False
+
+    #todo see where this function is called
+    def getURL(self,url):
+        """ Check if this url is the hash of the profiles! """
+        data = self.rcache.hget('URLsInfo', url)
         if data:
             return True
         else:
