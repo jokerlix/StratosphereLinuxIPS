@@ -35,8 +35,6 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         self.c1 = __database__.subscribe('new_flow')
         self.c2 = __database__.subscribe('new_dns_flow')
-        # VT api URL for querying IPs
-        self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
         # Read the conf file
         self.__read_configuration()
         self.key = None
@@ -116,6 +114,21 @@ class Module(Module, multiprocessing.Process):
 
         __database__.setInfoForIPs(ip, data)
         __database__.set_passive_dns(ip, passive_dns)
+
+    def get_url_vt_data(self,url):
+        """
+        Function to perform API call to VirusTotal and return scores for each of
+        the four processed categories. Response is cached in a dictionary.
+        :param url: url to check
+        :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio
+        """
+        pass
+
+    def set_url_data_in_URLInfo(self,url):
+        """
+        Function to set VirusTotal data of the URL in the URLInfo.
+        """
+        pass
 
     def set_domain_data_in_DomainInfo(self, domain, cached_data):
         """
@@ -246,7 +259,7 @@ class Module(Module, multiprocessing.Process):
                 return scores, '', ''
 
             # for unknown address, do the query
-            response = self.api_query_(ip)
+            response = self.api_query_(ip=ip)
             as_owner = self.get_as_owner(response)
             passive_dns = self.get_passive_dns(response)
             scores = interpret_response(response)
@@ -268,7 +281,7 @@ class Module(Module, multiprocessing.Process):
 
         try:
             # for unknown address, do the query
-            response = self.api_query_(domain)
+            response = self.api_query_(ip=domain)
             as_owner = self.get_as_owner(response)
             scores = interpret_response(response)
             self.counter += 1
@@ -279,16 +292,22 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
 
-    def api_query_(self, ip, save_data=False):
+    def api_query_(self, ip=False ,url=False, save_data=False):
         """
         Create request and perform API call
-        :param ip: IP address to check
+        :param ip: IP address or domain to check
+        :param url: URL to check
         :param save_data: False by default. Set to True to save each request json in a file named ip.txt
         :return: Response object
         """
-
-        params = {'apikey': self.key, 'ip': ip}
-
+        params = {'apikey': self.key}
+        if ip:
+            # VT api URL for querying IPs or domains
+            self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
+            params.update({'ip': ip})
+        elif url:
+            self.url = 'https://www.virustotal.com/vtapi/v2/url/report'
+            params.update({'resource': url})
         # wait for network
         while True:
             try:
@@ -297,7 +316,6 @@ class Module(Module, multiprocessing.Process):
             except urllib3.exceptions.MaxRetryError:
                 self.print("Network is not available, waiting 10s")
                 time.sleep(10)
-
         sleep_attempts = 0
 
         # repeat query if API limit was reached (code 204)
