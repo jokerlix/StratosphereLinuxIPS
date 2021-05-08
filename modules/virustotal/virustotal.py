@@ -117,18 +117,33 @@ class Module(Module, multiprocessing.Process):
 
     def get_url_vt_data(self,url):
         """
-        Function to perform API call to VirusTotal and return scores for each of
-        the four processed categories. Response is cached in a dictionary.
+        Function to perform API call to VirusTotal and return the score for the URL.
+        Response is cached in a dictionary.
         :param url: url to check
-        :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio
+        :return: URL ratio
         """
-        pass
+        response = self.api_query_(url=url)
+        # Can't get url report
+        if response['response_code'] is -1:
+            self.print(f"VT API returned an Error - {response['verbose_msg']}")
+            return 0
+        try:
+            score = int(response['positives']) / int(response['total'])
+        except:
+            score = 0
+        self.counter += 1
+        return score
 
     def set_url_data_in_URLInfo(self,url):
         """
         Function to set VirusTotal data of the URL in the URLInfo.
         """
-        pass
+        score = self.get_url_vt_data(url)
+        vtdata = {"URL" : score}
+        data = {"VirusTotal" : vtdata}
+        # todo : handle URLInfo in the database
+        # __database__.setInfoForURLs(url, data)
+
 
     def set_domain_data_in_DomainInfo(self, domain, cached_data):
         """
@@ -248,7 +263,7 @@ class Module(Module, multiprocessing.Process):
         Function to perform API call to VirusTotal and return scores for each of
         the four processed categories. Response is cached in a dictionary. Private IPs always return (0, 0, 0, 0).
         :param ip: IP address to check
-        :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio 
+        :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio
         """
 
         try:
