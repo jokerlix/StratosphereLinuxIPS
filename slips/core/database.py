@@ -1019,7 +1019,6 @@ class Database(object):
         return data
 
     def getallURLs(self):
-        #todo see where this function is called
         """ Return list of all URLs in the DB """
         data = self.rcache.hgetall('URLsInfo')
         # data = json.loads(data)
@@ -1076,9 +1075,6 @@ class Database(object):
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if an URL exists or not
             self.rcache.hset('URLsInfo', url, '{}')
-            # Publish that there is a new IP ready in the channel
-            # todo handle this channel
-            self.publish('new_url', url)
 
 
     def getIP(self, ip):
@@ -1089,7 +1085,6 @@ class Database(object):
         else:
             return False
 
-    #todo see where this function is called
     def getURL(self,url):
         """ Check if this url is the hash of the profiles! """
         data = self.rcache.hget('URLsInfo', url)
@@ -1169,7 +1164,7 @@ class Database(object):
     def setInfoForURLs(self, url: str, urldata: dict):
         """
         Store information for this URL
-        We receive a dictionary, such as {'VirusTotal': score} that we are
+        We receive a dictionary, such as {'VirusTotal': {'URL':score}} that we are
         going to store for this IP.
         If it was not there before we store it. If it was there before, we
         overwrite it
@@ -1182,20 +1177,29 @@ class Database(object):
             data = self.getIPData(url)
         # for now the urldata dict has only one key 'score',
         # stored it as a dict to add to it later if we need more info from vt
-        for key in iter(data):
-            data_to_store = urldata[key]
-            # If there is data previously stored, check if we have this key already
-            try:
-                # We modify value in any case, because there might be new info
-                _ = data[key]
-            except KeyError:
-                # There is no data for they key so far.
-                # Publish the changes
-                # todo: handle this channel
-                self.r.publish('url_info_change', url)
-            data[key] = data_to_store
-            newdata_str = json.dumps(data)
-            self.rcache.hset('URLsInfo', url, newdata_str)
+        # empty dicts evaluate to False
+        dict_has_keys = bool(data)
+        if dict_has_keys:
+            # loop through old data found in the db
+            for key in iter(data):
+                # Get the new data that has the same key
+                data_to_store = urldata[key]
+                # If there is data previously stored, check if we have this key already
+                try:
+                    # We modify value in any case, because there might be new info
+                    _ = data[key]
+                except KeyError:
+                    # There is no data for the key so far.
+                    pass
+                    # Publish the changes
+                    # self.r.publish('url_info_change', url)
+                data[key] = data_to_store
+                newdata_str = json.dumps(data)
+                self.rcache.hset('URLsInfo', url, newdata_str)
+        else:
+            # URL found in the database but has no keys , set the keys now
+            urldata = json.dumps(urldata)
+            self.rcache.hset('URLsInfo', url, urldata)
 
     def subscribe(self, channel):
         """ Subscribe to channel """

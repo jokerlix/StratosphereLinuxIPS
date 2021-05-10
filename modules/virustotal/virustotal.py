@@ -107,7 +107,6 @@ class Module(Module, multiprocessing.Process):
                   "timestamp": time.time()}
         data = {}
         data["VirusTotal"] = vtdata
-
         # Add asn if it is unknown or not in the IP info
         if cached_data and ('asn' not in cached_data or cached_data['asn'] == 'Unknown'):
             data['asn'] = as_owner
@@ -139,11 +138,11 @@ class Module(Module, multiprocessing.Process):
         Function to set VirusTotal data of the URL in the URLInfo.
         """
         score = self.get_url_vt_data(url)
+        # this dict has only one key, stored as a dict in case we
+        # need additional info from vt later
         vtdata = {"URL" : score}
         data = {"VirusTotal" : vtdata}
-        # todo : handle URLInfo in the database
-        # __database__.setInfoForURLs(url, data)
-
+        __database__.setInfoForURLs(url, data)
 
     def set_domain_data_in_DomainInfo(self, domain, cached_data):
         """
@@ -163,7 +162,6 @@ class Module(Module, multiprocessing.Process):
         if cached_data and ('asn' not in cached_data or cached_data['asn'] == 'Unknown'):
             data['asn'] = as_owner
         __database__.setInfoForDomains(domain, data)
-
 
     def run(self):
         if self.key is None:
