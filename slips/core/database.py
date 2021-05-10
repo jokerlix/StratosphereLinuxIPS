@@ -1175,8 +1175,6 @@ class Database(object):
             self.setNewURL(url)
             # Now get the data, which should be empty, but just in case
             data = self.getIPData(url)
-        # for now the urldata dict has only one key 'score',
-        # stored it as a dict to add to it later if we need more info from vt
         # empty dicts evaluate to False
         dict_has_keys = bool(data)
         if dict_has_keys:
@@ -1206,8 +1204,8 @@ class Database(object):
         # For when a TW is modified
         pubsub = self.r.pubsub()
         supported_channels = ['tw_modified' , 'evidence_added' , 'new_ip' ,  'new_flow' , 'new_dns', 'new_dns_flow','new_http', 'new_ssl' , 'new_profile',\
-                    'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change', 'dns_info_change', 'tw_closed', 'core_messages',\
-                    'new_blocking', 'new_ssh','new_url']
+                    'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change', 'tw_closed', 'core_messages',\
+                    'new_blocking', 'new_ssh','new_url','new_notice']
         for supported_channel in supported_channels:
             if supported_channel in channel:
                 pubsub.subscribe(channel)
@@ -1397,6 +1395,7 @@ class Database(object):
         to_send['flow'] = data
         to_send = json.dumps(to_send)
         self.publish('new_http', to_send)
+        self.publish('new_url', to_send)
         self.print('Adding HTTP flow to DB: {}'.format(data), 5, 0)
         # Check if the host domain is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         data_to_send = {

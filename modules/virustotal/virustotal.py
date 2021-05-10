@@ -35,6 +35,7 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         self.c1 = __database__.subscribe('new_flow')
         self.c2 = __database__.subscribe('new_dns_flow')
+        self.c3 = __database__.subscribe('new_url')
         # Read the conf file
         self.__read_configuration()
         self.key = None
@@ -133,14 +134,14 @@ class Module(Module, multiprocessing.Process):
         self.counter += 1
         return score
 
-    def set_url_data_in_URLInfo(self,url):
+    def set_url_data_in_URLInfo(self,url,cached_data):
         """
         Function to set VirusTotal data of the URL in the URLInfo.
         """
         score = self.get_url_vt_data(url)
-        # this dict has only one key, stored as a dict in case we
-        # need additional info from vt later
-        vtdata = {"URL" : score}
+        # Score of this url didn't change
+        vtdata = {"URL" : score,
+                  "timestamp": time.time()}
         data = {"VirusTotal" : vtdata}
         __database__.setInfoForURLs(url, data)
 
@@ -170,6 +171,8 @@ class Module(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
+
+                # -------------- new_flow channel
                 message_c1 = self.c1.get_message(timeout=0.01)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message_c1 and message_c1['data'] == 'stop_process':
@@ -200,7 +203,7 @@ class Module(Module, multiprocessing.Process):
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                             if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                                 self.set_vt_data_in_IPInfo(ip, cached_data)
-
+                # --------------- new_dns_flow channel
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 message_c2 = self.c2.get_message(timeout=0.01)
                 if message_c2 and message_c2['data'] == 'stop_process':
@@ -224,7 +227,29 @@ class Module(Module, multiprocessing.Process):
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                             if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                                 self.set_domain_data_in_DomainInfo(domain, cached_data)
-
+                # --------------- new_url channel
+                message_c3 = self.c3.get_message(timeout=0.01)
+                if message_c3 and message_c3['data'] == 'stop_process':
+                    return True
+                if message_c3 and message_c3['channel'] == 'new_url' and message_c3["type"] == "message":
+                    data = message_c3["data"]
+                    # The first message comes with data=1
+                    if type(data) == str:
+                        data = json.loads(data)
+                        profileid = data['profileid']
+                        twid = data['twid']
+                        flow_data = json.loads(data['flow'])
+                        url = flow_data['host'] + flow_data.get('uri','')
+                        cached_data = __database__.getURLData(url)
+                        # If VT data of this domain is not in the DomainInfo, ask VT
+                        # If 'Virustotal' key is not in the DomainInfo
+                        if not cached_data or 'VirusTotal' not in cached_data:
+                            # cached data is either False or {}
+                            self.set_url_data_in_URLInfo(url,cached_data)
+                        elif cached_data and 'VirusTotal' in cached_data:
+                            # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                            if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
+                                self.set_url_data_in_URLInfo(url, cached_data)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
