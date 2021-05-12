@@ -122,7 +122,7 @@ class Module(Module, multiprocessing.Process):
         :param url: url to check
         :return: URL ratio
         """
-        response = self.api_query_(url=url)
+        response = self.api_query_(url)
         # Can't get url report
         if response['response_code'] is -1:
             self.print(f"VT API returned an Error - {response['verbose_msg']}")
@@ -297,7 +297,7 @@ class Module(Module, multiprocessing.Process):
                 return scores, '', ''
 
             # for unknown address, do the query
-            response = self.api_query_(ip=ip)
+            response = self.api_query_(ip)
             as_owner = self.get_as_owner(response)
             passive_dns = self.get_passive_dns(response)
             scores = interpret_response(response)
@@ -319,7 +319,7 @@ class Module(Module, multiprocessing.Process):
 
         try:
             # for unknown address, do the query
-            response = self.api_query_(ip=domain)
+            response = self.api_query_(domain)
             as_owner = self.get_as_owner(response)
             scores = interpret_response(response)
             self.counter += 1
@@ -348,7 +348,7 @@ class Module(Module, multiprocessing.Process):
                 elif validators.url(ioc):
                     return 'url'
 
-    def api_query_(self, ip=False ,url=False, save_data=False):
+    def api_query_(self, ioc, save_data=False):
         """
         Create request and perform API call
         :param ip: IP address or domain to check
@@ -357,13 +357,20 @@ class Module(Module, multiprocessing.Process):
         :return: Response object
         """
         params = {'apikey': self.key}
-        if ip:
-            # VT api URL for querying IPs or domains
+        ioc_type = self.get_ioc_type('ioc')
+        if ioc_type is 'ip':
+            # VT api URL for querying IPs
             self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
-            params.update({'ip': ip})
-        elif url:
+            params.update({'ip': ioc})
+        elif ioc_type is 'domain':
+             # VT api URL for querying domains
+            self.url = 'https://www.virustotal.com/vtapi/v2/domain/report'
+            params.update({'domain': ioc})
+        elif ioc_type is 'url':
+             # VT api URL for querying URLS
             self.url = 'https://www.virustotal.com/vtapi/v2/url/report'
-            params.update({'resource': url})
+            params.update({'resource': ioc})
+
         # wait for network
         while True:
             try:
@@ -414,7 +421,7 @@ class Module(Module, multiprocessing.Process):
 
         # optionally, save data to file
         if save_data:
-            filename = ip + ".txt"
+            filename = ioc + ".txt"
             if filename:
                 with open(filename, 'w') as f:
                     json.dump(data, f)
