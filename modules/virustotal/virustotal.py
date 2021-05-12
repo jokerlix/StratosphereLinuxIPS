@@ -11,7 +11,7 @@ import urllib3
 import certifi
 import time
 import ipaddress
-
+import validators
 
 class Module(Module, multiprocessing.Process):
     name = 'VirusTotal'
@@ -329,6 +329,24 @@ class Module(Module, multiprocessing.Process):
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
+
+    def get_ioc_type(self, ioc):
+        """ Check the type of ioc, returns url, ip or domain"""
+        try:
+            # Is IPv4
+            ip_address = ipaddress.IPv4Address(ioc)
+            return 'ip'
+        except ipaddress.AddressValueError:
+            # Is it ipv6?
+            try:
+                ip_address = ipaddress.IPv6Address(ioc)
+                return 'ip'
+            except ipaddress.AddressValueError:
+                # It does not look as IP address.
+                if validators.domain(ioc):
+                    return 'domain'
+                elif validators.url(ioc):
+                    return 'url'
 
     def api_query_(self, ip=False ,url=False, save_data=False):
         """
