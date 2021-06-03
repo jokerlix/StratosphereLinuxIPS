@@ -355,7 +355,6 @@ class Module(Module, multiprocessing.Process):
                 if old_hash == new_hash:
                     # The 2 hashes are identical. File is up to date.
                     self.print(f'File {localfile} is up to date.', 3, 0)
-                    return True
                 elif new_hash and old_hash != new_hash:
                     # Our malicious file was changed. Load the new one
                     self.print(f'Updating the local TI file {localfile}')
@@ -371,18 +370,16 @@ class Module(Module, multiprocessing.Process):
                     malicious_file_info['e-tag'] = new_hash
                     malicious_file_info['time'] = ''
                     __database__.set_malicious_file_info(localfile, malicious_file_info)
-                    return True
                 elif not new_hash:
                     # Something failed. Do not download
                     self.print(f'Some error ocurred on calculating file hash. Not loading  the file {localfile}', 0, 1)
-                    return False
-
-
+            return True
         except Exception as inst:
             self.print('Problem on __load_malicious_local_files()', 0, 0)
             self.print(str(type(inst)), 0, 0)
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
+            return False
 
     def set_maliciousDomain_to_MaliciousDomains(self, domain, profileid, twid):
         '''
