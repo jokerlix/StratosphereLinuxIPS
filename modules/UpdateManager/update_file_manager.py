@@ -33,10 +33,10 @@ class UpdateFileManager:
             self.update_period = 86400
         try:
             # Read the path to where to store and read the malicious files
-            self.path_to_threat_intelligence_data = self.config.get('threatintelligence', 'download_path_for_remote_threat_intelligence')
+            self.remote_ti_files_dir = self.config.get('threatintelligence', 'download_path_for_remote_threat_intelligence')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.path_to_threat_intelligence_data = 'modules/ThreatIntelligence1/remote_data_files/'
+            self.remote_ti_files_dir = 'modules/ThreatIntelligence1/remote_data_files/'
         try:
             # Read the list of URLs to download. Convert to list
             self.list_of_urls = self.config.get('threatintelligence', 'ti_files').split(',')
@@ -70,7 +70,7 @@ class UpdateFileManager:
         try:
             last_update = data['time']
             last_update = float(last_update)
-        except TypeError:
+        except (TypeError, ValueError):
             last_update = float('-inf')
 
         now = time.time()
@@ -120,8 +120,8 @@ class UpdateFileManager:
     def __download_malicious_file(self, file_to_download: str) -> bool:
         try:
             # Check that the folder exist
-            if not os.path.isdir(self.path_to_threat_intelligence_data):
-                os.mkdir(self.path_to_threat_intelligence_data)
+            if not os.path.isdir(self.remote_ti_files_dir):
+                os.mkdir(self.remote_ti_files_dir)
 
             file_name_to_download = file_to_download.split('/')[-1]
             # Get what files are stored in cache db and their E-TAG to comapre with current files
@@ -136,14 +136,14 @@ class UpdateFileManager:
             if new_e_tag and old_e_tag != new_e_tag:
                 # Our malicious file is old. Download new one.
                 self.print(f'Trying to download the file {file_name_to_download}', 3, 0)
-                if not self.__download_file(file_to_download, self.path_to_threat_intelligence_data + '/' + file_name_to_download):
+                if not self.__download_file(file_to_download, self.remote_ti_files_dir + '/' + file_name_to_download):
                     return False
 
                 if old_e_tag:
                     # File is updated and was in database. Delete previous IPs of this file.
                     self.__delete_old_source_data_from_database(file_name_to_download)
-                # Load updated IPs to the database
-                if not self.__load_malicious_datafile(self.path_to_threat_intelligence_data + '/' + file_name_to_download, file_name_to_download):
+                # Load updated IPs to the database from downloaded ti file
+                if not self.__load_malicious_datafile(self.remote_ti_files_dir + '/' + file_name_to_download, file_name_to_download):
                     return False
                 # Store the new etag and time of file in the database
                 malicious_file_info = {}
@@ -243,9 +243,9 @@ class UpdateFileManager:
         self.__delete_old_source_IPs(data_file)
         self.__delete_old_source_Domains(data_file)
 
-    def __load_malicious_datafile(self, malicious_data_path: str, data_file_name) -> None:
+    def __load_malicious_datafile(self, malicious_data_path: str, data_file_name) -> bool:
         """
-        Read all the files holding IP addresses and a description and put the
+        Read all the downloaded ti files holding IP addresses and a description and put the
         info in a large dict.
         This also helps in having unique ioc accross files
         Returns nothing, but the dictionary should be filled
@@ -253,33 +253,35 @@ class UpdateFileManager:
         try:
             malicious_ips_dict = {}
             malicious_domains_dict = {}
-            with open(malicious_data_path) as malicious_file:
+            with open(malicious_data_path,'r') as malicious_file:
 
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 4, 0)
-
-                # Remove comments and find the description column if possible
+                # for debugging
+                line_number = 0
+                # Remove comments at the begging of the file and find the description column if possible
                 description_column = None
                 while True:
                     line = malicious_file.readline()
+                    line_number +=1
                     # break while statement if it is not a comment line
                     # i.e. does not startwith #
                     if line.startswith('#"type"'):
-                        # looks like the colums names, search where is the
+                        # looks like the columns names, search where is the
                         # description column
                         for name_column in line.split(','):
                             if name_column.lower().startswith('desc'):
                                 description_column = line.split(',').index(name_column)
-                    if not line.startswith('#') and not line.lower().strip().startswith('"type"') and not line.lower().strip().startswith('type'):
+                    if not line.startswith('#') and not line.startswith('"type"'):
                         break
-
-                #
-                # Find in which column is the imporant info in this
+                # some files have (\n) or spaces/tabs after the first few comments , we should ignore them
+                while len(line) < 5 or line.isspace() or line.startswith('#'):
+                    # skip to the next line
+                    line = malicious_file.readline()
+                    line_number+=1
+                # Find in which column is the important info in this
                 # TI file (domain or ip)
-                #
-
                 # Store the current position of the TI file
                 current_file_position = malicious_file.tell()
-
                 # temp_line = malicious_file.readline()
                 data = line.replace("\n","").replace("\"","").split(",")
                 amount_of_columns = len(line.split(","))
@@ -287,9 +289,26 @@ class UpdateFileManager:
                     description_column = amount_of_columns - 1
                 # Search the first column that is an IPv4, IPv6 or domain
                 for column in range(amount_of_columns):
+                    # To delete the subnet mask in case of .netset files
+                    # format 220.154.0.0/16 or ip without subnet mask
+                    try:
+                        # is a netset file
+                        data[column] = data[column][:data[column].index("/")]
+                    except ValueError:
+                        # not a netset file
+                        pass
+
+                    # To get the ip in ipsum feeds format
+                    # format: ip    number_of_blacklists (tab separated)
+                    # format: 192.168.1.1    1
+                    if "\t" in data[column]:
+                        data[column] = data[column].split()[0]
+                    current_ioc = data[column].strip()
+                    # print(f"Checking filename: {data_file_name}, line_number: {line_number}, current_ioc : {current_ioc}")
+
                     # Check if ip is valid.
                     try:
-                        ip_address = ipaddress.IPv4Address(data[column].strip())
+                        ip_address = ipaddress.IPv4Address(current_ioc)
                         # Is IPv4! let go
                         data_column = column
                         self.print(f'The data is on column {column} and is ipv4: {ip_address}', 0, 6)
@@ -297,7 +316,7 @@ class UpdateFileManager:
                     except ipaddress.AddressValueError:
                         # Is it ipv6?
                         try:
-                            ip_address = ipaddress.IPv6Address(data[column].strip())
+                            ip_address = ipaddress.IPv6Address(current_ioc)
                             # Is IPv6! let go
                             data_column = column
                             self.print(f'The data is on column {column} and is ipv6: {ip_address}', 0, 6)
@@ -305,7 +324,7 @@ class UpdateFileManager:
                         except ipaddress.AddressValueError:
                             # It does not look as IP address.
                             # So it should be a domain
-                            if validators.domain(data[column].strip()):
+                            if validators.domain(current_ioc):
                                 data_column = column
                                 self.print(f'The data is on column {column} and is domain: {data[column]}', 0, 6)
                                 break
@@ -314,14 +333,17 @@ class UpdateFileManager:
                                 data_column = None
                                 pass
                 if data_column is None:
-                    self.print(f'Error while reading the TI file {malicious_data_path}. Could not find a column with an IP or domain', 1, 1)
+                    self.print(f'Error while reading the TI file {malicious_file}. Could not find a column with an IP or domain', 1, 1)
                     return False
 
                 # Now that we read the first line, go back so we
                 # can process it
                 malicious_file.seek(current_file_position)
-
                 for line in malicious_file:
+                    line_number +=1
+                    # some files have (\n) or spaces in the middle of the file, ignore them
+                    if len(line) < 5  or line.isspace() or line.startswith("#") or line == '':
+                        continue
                     # The format of the file should be
                     # "0", "103.15.53.231","90", "Karel from our village. He is bad guy."
                     # So the second column will be used as important data with
@@ -332,15 +354,41 @@ class UpdateFileManager:
                     # Separate the lines like CSV
                     # In the new format the ip is in the second position.
                     # And surronded by "
-                    data = line.replace("\n", "").replace("\"", "").split(",")[data_column].strip()
+                    data = line.replace("\n","").replace("\"","").split(",")[data_column].strip()
+                    # To delete the subnet mask in case of .netset files
+                    if 'http' not in data:
+                        try:
+                            # this is a netset file and the / is for the subnet mask
+                            data = data[:data.index("/")]
+                        except:
+                            # not a netset feed
+                            pass
 
-                    try:
-                        description = line.replace("\n", "").replace("\"", "").split(",")[description_column].strip()
-                    except IndexError:
-                        self.print(f'IndexError Description column: {description_column}. Line: {line}')
-                    self.print('\tRead Data {}: {}'.format(data, description), 10, 0)
+                    # Handle ipsum feeds and .intel feeds
+                    if "\t" in data:
+                        column_data = tuple(data.split("\t"))
+                        data_ , second_column_data= column_data[0], column_data[1].lower()
+                        if 'intel' in second_column_data:
+                            # is .intel feed
+                            #fields	indicator	indicator_type	meta.source	meta.do_notice	meta.desc
+                            # second column is intel::type of ioc, for example: Intel::DOMAIN
+                            if ('hash' in second_column_data
+                                or 'email' in second_column_data
+                                or 'url' in second_column_data):
+                                # ignore this type of ioc, go to the next line
+                                continue
+                            description = second_column_data + " " + data.split()[4]
+                        else:
+                            # is ipsum feed
+                            # second column is the number of blacklists
+                            description =  "Appeared in " + second_column_data + " blacklists"
+                        data = data_
+                    else:
+                        # not ipsum file
+                        description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
+                    self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
 
-                    # Check if the data is a valid IPv4, IPv6 or domain
+                    # Check if ip is valid.
                     try:
                         ip_address = ipaddress.IPv4Address(data)
                         # Is IPv4!
@@ -361,6 +409,7 @@ class UpdateFileManager:
                                 # Store the ip in our local dict
                                 malicious_domains_dict[str(domain)] = json.dumps({'description': description, 'source':data_file_name})
                             else:
+                                # line not valid, read next line
                                 self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 1, 1)
                                 continue
             # Add all loaded malicious ips to the database
