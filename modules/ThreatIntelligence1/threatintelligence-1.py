@@ -137,27 +137,29 @@ class Module(Module, multiprocessing.Process):
             malicious_ips_dict = {}
             malicious_domains_dict = {}
             with open(malicious_data_path,'r') as malicious_file:
-
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 4, 0)
-
+                # for debugging
+                line_number = 0
                 # Remove comments at the begging of the file and find the description column if possible
                 description_column = None
                 while True:
                     line = malicious_file.readline()
+                    line_number +=1
                     # break while statement if it is not a comment line
                     # i.e. does not startwith #
                     if line.startswith('#"type"'):
-                        # looks like the colums names, search where is the
+                        # looks like the columns names, search where is the
                         # description column
                         for name_column in line.split(','):
                             if name_column.lower().startswith('desc'):
                                 description_column = line.split(',').index(name_column)
                     if not line.startswith('#') and not line.startswith('"type"'):
                         break
-                # some files have (\n) or spaces after the first few comments , we should ignore them
-                while len(line) < 5 or line.isspace():
+                # some files have (\n) or spaces/tabs after the first few comments , we should ignore them
+                while len(line) < 5 or line.isspace() or line.startswith('#'):
                     # skip to the next line
                     line = malicious_file.readline()
+                    line_number+=1
                 # Find in which column is the important info in this
                 # TI file (domain or ip)
                 # Store the current position of the TI file
@@ -172,17 +174,18 @@ class Module(Module, multiprocessing.Process):
                     # To delete the subnet mask in case of .netset files
                     # format 220.154.0.0/16 or ip without subnet mask
                     try:
+                        # is a netset file
                         data[column] = data[column][:data[column].index("/")]
-                    except:
+                    except ValueError:
                         # not a netset file
                         pass
                     # To get the ip in ipsum feeds format
                     # format: ip    number_of_blacklists (tab separated)
-                    # format 47.233.44.180    1
+                    # format: 192.168.1.1    1
                     if "\t" in data[column]:
                         data[column] = data[column].split()[0]
-
                     current_ioc = data[column].strip()
+                    # print(f"Checking filename: {data_file_name}, line_number: {line_number}, current_ioc : {current_ioc}")
                     # Check if ip is valid.
                     try:
                         ip_address = ipaddress.IPv4Address(current_ioc)
@@ -212,13 +215,13 @@ class Module(Module, multiprocessing.Process):
                 if data_column is None:
                     self.print(f'Error while reading the TI file {malicious_file}. Could not find a column with an IP or domain', 1, 1)
                     return False
-
                 # Now that we read the first line, go back so we
                 # can process it
                 malicious_file.seek(current_file_position)
                 for line in malicious_file:
+                    line_number +=1
                     # some files have (\n) or spaces in the middle of the file, ignore them
-                    if len(line) < 5  or line.isspace() or line.startswith("#") or line is '':
+                    if len(line) < 5  or line.isspace() or line.startswith("#") or line == '':
                         continue
                     # The format of the file should be
                     # "0", "103.15.53.231","90", "Karel from our village. He is bad guy."
@@ -226,7 +229,6 @@ class Module(Module, multiprocessing.Process):
                     # an IP or domain
                     # In the case of domains can be
                     # domain,www.netspy.net,NetSpy
-
                     # Separate the lines like CSV
                     # In the new format the ip is in the second position.
                     # And surronded by "
@@ -239,7 +241,6 @@ class Module(Module, multiprocessing.Process):
                         except:
                             # not a netset feed
                             pass
-
                     # Handle ipsum feeds and .intel feeds
                     if "\t" in data:
                         column_data = tuple(data.split("\t"))
@@ -263,7 +264,6 @@ class Module(Module, multiprocessing.Process):
                         # not ipsum file
                         description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
                     self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
-
                     # Check if ip is valid.
                     try:
                         ip_address = ipaddress.IPv4Address(data)
@@ -285,21 +285,23 @@ class Module(Module, multiprocessing.Process):
                                 # Store the ip in our local dict
                                 malicious_domains_dict[str(domain)] = json.dumps({'description': description, 'source':data_file_name})
                             else:
+                                # line not valid, read next line
                                 self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 1, 1)
                                 continue
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
             __database__.add_domains_to_IoC(malicious_domains_dict)
-        except KeyboardInterrupt:
             return True
+        except KeyboardInterrupt:
+            return False
         except Exception as inst:
             self.print('Problem on the __load_malicious_datafile()', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
             print(traceback.format_exc())
-            return True
+            return False
 
     def __delete_old_source_IPs(self, file):
         """
