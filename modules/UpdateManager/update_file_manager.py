@@ -254,7 +254,6 @@ class UpdateFileManager:
             malicious_ips_dict = {}
             malicious_domains_dict = {}
             with open(malicious_data_path,'r') as malicious_file:
-
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 4, 0)
                 # for debugging
                 line_number = 0
@@ -271,7 +270,7 @@ class UpdateFileManager:
                         for name_column in line.split(','):
                             if name_column.lower().startswith('desc'):
                                 description_column = line.split(',').index(name_column)
-                    if not line.startswith('#') and not line.startswith('"type"'):
+                    if not line.startswith('#') and not line.startswith('"type"') and not line.startswith('Type'):
                         break
                 # some files have (\n) or spaces/tabs after the first few comments , we should ignore them
                 while len(line) < 5 or line.isspace() or line.startswith('#'):
