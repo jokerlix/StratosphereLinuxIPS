@@ -347,6 +347,9 @@ class Module(Module, multiprocessing.Process):
                     return 'domain'
                 elif validators.url(ioc):
                     return 'url'
+                else:
+                    # 192.168.1.1/wpad.dat combinations like this are treated as a url
+                    return 'url'
 
     def api_query_(self, ioc, save_data=False):
         """
@@ -357,7 +360,7 @@ class Module(Module, multiprocessing.Process):
         :return: Response object
         """
         params = {'apikey': self.key}
-        ioc_type = self.get_ioc_type('ioc')
+        ioc_type = self.get_ioc_type(ioc)
         if ioc_type is 'ip':
             # VT api URL for querying IPs
             self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
@@ -530,7 +533,7 @@ def count_positives(response: dict, response_key: str, positive_key, total_key):
     """
     detections = 0
     total = 0
-    if response_key in response.keys():
+    if response_key in response:
         for item in response[response_key]:
             detections += item[positive_key]
             total += item[total_key]
