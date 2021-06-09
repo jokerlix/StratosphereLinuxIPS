@@ -385,7 +385,12 @@ class UpdateFileManager:
                         data = data_
                     else:
                         # not ipsum file
-                        description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
+                        try:
+                            description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
+                        except IndexError:
+                            # line has a missing column, ignore it
+                            continue
+
                     self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
 
                     # Check if ip is valid.
