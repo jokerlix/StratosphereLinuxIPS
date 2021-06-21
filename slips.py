@@ -216,6 +216,7 @@ if __name__ == '__main__':
         with open(args.config) as source:
             config.read_file(source)
     except IOError:
+        print(f"Error opening file {args.config} \nStopping.")
         sys.exit(-1)
     except TypeError:
         # No conf file provided, use the default file
