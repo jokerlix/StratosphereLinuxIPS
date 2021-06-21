@@ -216,10 +216,11 @@ if __name__ == '__main__':
         with open(args.config) as source:
             config.read_file(source)
     except IOError:
-        pass
+        sys.exit(-1)
     except TypeError:
-        # No conf file provided
-        pass
+        # No conf file provided, use the default file
+        with open('slips.conf') as source:
+            config.read_file(source)
 
     # Check if redis server running
     if check_redis_database() is False:
