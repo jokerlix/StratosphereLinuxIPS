@@ -11,8 +11,7 @@ import time
 import maxminddb
 import ipaddress
 import ipwhois
-import json
-#todo add to conda env
+import dns.resolver
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -40,6 +39,8 @@ class Module(Module, multiprocessing.Process):
         self.timeout = None
         # update asn every 1 month
         self.update_period = 2592000
+        dns.resolver.default_resolver=dns.resolver.Resolver(configure=False)
+        dns.resolver.default_resolver.nameservers=['8.8.8.8']
 
 
     def print(self, text, verbose=1, debug=0):
