@@ -262,6 +262,12 @@ class UpdateFileManager:
                     line = malicious_file.readline()
                     # break while statement if it is not a comment line
                     # i.e. does not startwith #
+                    if line.startswith('"ip_v4"'):
+                        # rstcloud csv files start with 'ip_v4'
+                        line = malicious_file.readline()
+                        # tags_str column is the description column
+                        description_column = 2
+                        break
                     if line.startswith('#"type"'):
                         # looks like the colums names, search where is the
                         # description column
